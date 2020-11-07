@@ -200,22 +200,6 @@ int main(int argc, char *argv[])
         }
 
         //Creer image correspondant au tableau de pixels
-        if (dede)
-        {
-            ofstream logexit("logexit.ppm");
-            logexit <<"P3\n"
-                         << windowSize << " " << windowSize << " 255\n";
-            for (int i = 0; i < windowSize * windowSize * 4; i++)
-            {
-                for (int w = 0; w < 4; w++)
-                {
-                    logexit << (int)pixels.at(w);
-                }
-                logexit << "\n";
-            }
-            cout << "finish" << endl;
-            dede = false;
-        }
 
         image.create(windowSize, windowSize, pixels.data());
 
