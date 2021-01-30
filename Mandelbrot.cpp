@@ -9,15 +9,16 @@
 
 using namespace std;
 
-const int windowSize = 800;
+int windowSizex = 800;
+int windowSizey = 800;
 const int MAX_ITERATION = 20;
 std::mutex m;
 
 
 const auto processor_count = std::thread::hardware_concurrency();
-sf::Uint8 *redArray;
+sf::Uint8 *fractalArray;
 
-std::vector<std::thread *> threadlist;
+std::vector<std::thread *> threadList;
 
 struct rgba {
     int r;
@@ -29,7 +30,7 @@ struct rgba {
 rgba mandelBrotColor(long double x, long double y, double cr = 0, double cy = 0) {
     rgba colors;
     int brightness;
-    complex<double> a(x / (long double) windowSize - cr, y /(long double) windowSize - cy);
+    complex<double> a(x / (long double) windowSizex - cr, y / (long double) windowSizey - cy);
     complex<double> z(0, 0);
 
     int i = 0;
@@ -37,7 +38,6 @@ rgba mandelBrotColor(long double x, long double y, double cr = 0, double cy = 0)
         z = z * z + a; //z²+c
         i++;
     }
-
     brightness = (255 * i) / MAX_ITERATION;
 
     if (i < MAX_ITERATION)
@@ -51,83 +51,109 @@ rgba mandelBrotColor(long double x, long double y, double cr = 0, double cy = 0)
     }
     colors.g = brightness;
     colors.b = (int) sqrt(brightness);
+    colors.a = 255;
     return colors;
 
 }
 
 void draw(int index) {
-    for (int y = 0; y < windowSize; y++) {
-        for (int x = index * (windowSize / processor_count); x < (index + 1) * (windowSize / processor_count); x++) {
-            redArray[x + y * windowSize] = mandelBrotColor(x, y).r;
+
+    for (int y = 0; y < windowSizey; y++) {
+        for (int x = index * (windowSizex / processor_count); x < (index + 1) * (windowSizex / processor_count); x++) {
+
+            rgba colors = mandelBrotColor(x, y);
+            m.lock();
+            fractalArray[x * 4 + y * windowSizey * 4] = colors.r;
+            fractalArray[x * 4 + y * windowSizey * 4 + 1] = colors.g;
+            fractalArray[x * 4 + y * windowSizey * 4 + 2] = colors.b;
+            fractalArray[x * 4 + y * windowSizey * 4 + 3] = colors.a;
+            m.unlock();
         }
     }
 }
 
 void createThreadList() {
     for (int i = 0; i < processor_count; i++) {
-        cout << "new thread :" << i << endl;
-        threadlist.push_back(new std::thread(draw, i));
+        try{
+            threadList.push_back(new std::thread(draw, i));
+            cout << "new thread :" << i << endl;
+
+        }catch( std::system_error &_err){
+            cerr << "create thread :" << i << " errcode "<<_err.code() << " what ?? " << _err.what() << endl;
+        }
+
     }
 }
 
 void joinThreadList() {
     for (int i = 0; i < processor_count; i++) {
-        cout << " thread :" << i << "joined"  << endl;
-        threadlist.at(i)->join();
-    }
-}
+        try{
+            threadList.at(i)->join();
+            cout << " thread joined :" << i << endl;
 
-sf::Uint8 *turnRtoRGBA(){
-    auto *newArray = new sf::Uint8[windowSize*windowSize*4];
-    for(int x = 0; x < windowSize*windowSize; x++){
-        newArray[x*4]=redArray[x];//r
-        newArray[x*4+1]=0;//g
-        newArray[x*4+2]=0;//b
-        newArray[x*4+3]=255;//a
+        }catch( std::system_error &_err){
+            cerr << "join thread :" << i << " errcode " <<_err.code() << " what ?? " << _err.what() << endl;
+        }
     }
-
-    return newArray;
 }
 
 
 int main(int argc, char *argv[]) {
-    redArray = new sf::Uint8[windowSize * windowSize];
+
+    sf::RenderWindow window(sf::VideoMode(windowSizex, windowSizey, 8), "MandelBrot Fractal");
+    sf::Texture texture;
+
+    fractalArray = new sf::Uint8[windowSizex * windowSizey * 4];
+
     createThreadList();
     joinThreadList();
-    ofstream my_image("Mandelbrot.ppm");
-    sf::Uint8 *newarray = turnRtoRGBA();
 
+
+    //picture drawer
+/*
+    ofstream my_image("Mandelbrot.txt");
     if (my_image.is_open()) {
         my_image << "P3\n"
-                 << windowSize << " " << windowSize << " 255\n";
-        for (int y = 0; y < windowSize * windowSize*4; y+=4) {
-            my_image << (int)newarray[y] << ' ' << (int)newarray[y+1] << ' ' << (int)newarray[y+2]  <<  "\n";
+                 << windowSizex << " " << windowSizey << " 255\n";
+        for (int y = 0; y < windowSizex * windowSizey * 4; y += 4) {
+            my_image << (int) fractalArray[y] << ' ' << (int) fractalArray[y + 1] << ' ' << (int) fractalArray[y + 2]
+                     << "\n";
         }
         my_image.close();
     }
+    */
 
-    sf::RenderWindow window(sf::VideoMode(windowSize, windowSize,8), "MandelBrot Fractal");
-    sf::Texture texture;
-
-    if(!texture.create(windowSize, windowSize)){
+    if (!texture.create(windowSizex, windowSizey)) {
         cerr << "erreur creating texture" << endl;
         return -1;
     }
-    cout << "taille" << texture.getSize().x  << ":" << texture.getSize().y  << endl;
-    cout << "taille w" << window.getSize().x << ":" << window.getSize().y << endl;
     sf::Sprite sprite(texture);
 
-    while (window.isOpen()){
+    while (window.isOpen()) {
         sf::Event event;
-        while(window.pollEvent(event)){
-            if(event.type == sf::Event::Closed){
+        while (window.pollEvent(event)) {
+            if (event.type == sf::Event::Closed) {
                 window.close();
                 return 0;
             }
+            switch (event.type) {
+                case sf::Event::Resized:
+                    cout << "change" << endl;
+                    windowSizex = event.size.width;
+                    windowSizey = event.size.height;
+                    if (!texture.create(windowSizex, windowSizey)) {
+                        cerr << "erreur creating texture" << endl;
+                        return -1;
+                    }
+                    delete(fractalArray);
+                    fractalArray = new sf::Uint8[windowSizex * windowSizey * 4];
+                    createThreadList();
+                    joinThreadList();
+                    break;
+            }
         }
-        sf::Uint8 *ptr = turnRtoRGBA();
-        texture.update(ptr);
-        window.clear(sf::Color::White);
+        texture.update(fractalArray);
+        window.clear(sf::Color::Black);
         window.draw(sprite);
         window.display();
     }
