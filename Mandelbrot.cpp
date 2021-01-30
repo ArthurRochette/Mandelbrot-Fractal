@@ -9,13 +9,13 @@
 
 using namespace std;
 
-const int windowSize = 300;
+const int windowSize = 800;
 const int MAX_ITERATION = 20;
 std::mutex m;
 
 
-const auto processor_count = 1;
-
+const auto processor_count = std::thread::hardware_concurrency();
+sf::Uint8 *redArray;
 
 std::vector<std::thread *> threadlist;
 
@@ -28,19 +28,20 @@ struct rgba {
 
 rgba mandelBrotColor(long double x, long double y, double cr = 0, double cy = 0) {
     rgba colors;
-    sf::Uint8 brightness;
-    complex<long double> a((long double) (x) / (long double) (windowSize - cr), (y) / (long double) (windowSize - cy));
-    complex<long double> z(0, 0);
+    int brightness;
+    complex<double> a(x / (long double) windowSize - cr, y /(long double) windowSize - cy);
+    complex<double> z(0, 0);
 
     int i = 0;
-
-    while (abs(z) < 2 && i < MAX_ITERATION) {
+    while (abs(z) < 2 && i <= MAX_ITERATION) {
         z = z * z + a; //z²+c
         i++;
     }
 
+    brightness = (255 * i) / MAX_ITERATION;
+
     if (i < MAX_ITERATION)
-        brightness = (sf::Uint8) (255 * i) / MAX_ITERATION;
+        brightness = (255 * i) / MAX_ITERATION;
     else
         brightness = 0;
 
@@ -49,78 +50,87 @@ rgba mandelBrotColor(long double x, long double y, double cr = 0, double cy = 0)
         colors.r = 255;
     }
     colors.g = brightness;
-    colors.b = (sf::Uint8) sqrt(brightness);
-    colors.a = 255;
+    colors.b = (int) sqrt(brightness);
     return colors;
+
 }
 
-void draw(int index, sf::Uint8 *pixels) {
+void draw(int index) {
     for (int y = 0; y < windowSize; y++) {
-        for (int x = index * (windowSize / processor_count);
-             x < ((windowSize * 4) / processor_count) * index + 1; x += 4) {
-            rgba colors = mandelBrotColor(x, y);
-            m.lock();
-            pixels[x + y * windowSize] = (sf::Uint8) colors.r;//r
-            pixels[x + y * windowSize + 1] = (sf::Uint8) colors.g;//g
-            pixels[x + y * windowSize + 2] = (sf::Uint8) colors.b;//b
-            pixels[x + y * windowSize + 4] = (sf::Uint8) colors.a;//a
-
-            m.unlock();
+        for (int x = index * (windowSize / processor_count); x < (index + 1) * (windowSize / processor_count); x++) {
+            redArray[x + y * windowSize] = mandelBrotColor(x, y).r;
         }
     }
-
 }
 
-void createThreadList(sf::Uint8 *pixels) {
+void createThreadList() {
     for (int i = 0; i < processor_count; i++) {
-        threadlist.push_back(new std::thread(draw, i, pixels));
-        std::cout << "Thread " << i << " created " << endl;
+        cout << "new thread :" << i << endl;
+        threadlist.push_back(new std::thread(draw, i));
     }
 }
 
-void syncThreadList() {
+void joinThreadList() {
     for (int i = 0; i < processor_count; i++) {
+        cout << " thread :" << i << "joined"  << endl;
         threadlist.at(i)->join();
-        threadlist.erase(threadlist.begin()+ i);
-        std::cout << "Thread " << i << " joined " << endl;
     }
 }
+
+sf::Uint8 *turnRtoRGBA(){
+    auto *newArray = new sf::Uint8[windowSize*windowSize*4];
+    for(int x = 0; x < windowSize*windowSize; x++){
+        newArray[x*4]=redArray[x];//r
+        newArray[x*4+1]=0;//g
+        newArray[x*4+2]=0;//b
+        newArray[x*4+3]=255;//a
+    }
+
+    return newArray;
+}
+
 
 int main(int argc, char *argv[]) {
+    redArray = new sf::Uint8[windowSize * windowSize];
+    createThreadList();
+    joinThreadList();
+    ofstream my_image("Mandelbrot.ppm");
+    sf::Uint8 *newarray = turnRtoRGBA();
 
-    cout << "CPU core: " << processor_count << endl;
-
-
-
-
-    sf::Uint8 *pixels = new sf::Uint8[windowSize * windowSize * 4]; //rgba
-    sf::Texture texture;
-    if (!texture.create(windowSize, windowSize)) {
-        cerr << "Failed create Texture" << endl;
+    if (my_image.is_open()) {
+        my_image << "P3\n"
+                 << windowSize << " " << windowSize << " 255\n";
+        for (int y = 0; y < windowSize * windowSize*4; y+=4) {
+            my_image << (int)newarray[y] << ' ' << (int)newarray[y+1] << ' ' << (int)newarray[y+2]  <<  "\n";
+        }
+        my_image.close();
     }
+
+    sf::RenderWindow window(sf::VideoMode(windowSize, windowSize,8), "MandelBrot Fractal");
+    sf::Texture texture;
+
+    if(!texture.create(windowSize, windowSize)){
+        cerr << "erreur creating texture" << endl;
+        return -1;
+    }
+    cout << "taille" << texture.getSize().x  << ":" << texture.getSize().y  << endl;
+    cout << "taille w" << window.getSize().x << ":" << window.getSize().y << endl;
     sf::Sprite sprite(texture);
-    sf::Image image;
-    sf::RenderWindow window(sf::VideoMode(windowSize, windowSize), "Mandelbrot");
 
-    while (window.isOpen()) {
-        try{
-            createThreadList(pixels);
-            syncThreadList();
-        }catch(std::system_error& err){
-            cout << err.code() << endl;
-            cout << err.what() << endl;
-            return -1;
-        }
-
+    while (window.isOpen()){
         sf::Event event;
-        while (window.pollEvent(event)) {
-            if (event.type == sf::Event::Closed)
+        while(window.pollEvent(event)){
+            if(event.type == sf::Event::Closed){
                 window.close();
+                return 0;
+            }
         }
-        texture.update(pixels);
-        window.clear(sf::Color::Black);
+        sf::Uint8 *ptr = turnRtoRGBA();
+        texture.update(ptr);
+        window.clear(sf::Color::White);
         window.draw(sprite);
         window.display();
     }
     return 0;
+
 }
