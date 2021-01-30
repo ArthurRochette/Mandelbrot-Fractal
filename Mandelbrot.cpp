@@ -113,8 +113,6 @@ int main(int argc, char *argv[]) {
         cerr << "erreur creating texture" << endl;
         return -1;
     }
-    cout << "taille" << texture.getSize().x  << ":" << texture.getSize().y  << endl;
-    cout << "taille w" << window.getSize().x << ":" << window.getSize().y << endl;
     sf::Sprite sprite(texture);
 
     while (window.isOpen()){
