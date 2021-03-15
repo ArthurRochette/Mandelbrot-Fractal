@@ -18,7 +18,7 @@ const auto processor_count = std::thread::hardware_concurrency();
 sf::Uint8 *redArray;
 
 std::vector<std::thread *> threadlist;
-
+double posx = 0, posy = 0, zoom = 1;
 struct rgba {
     int r;
     int g;
@@ -26,19 +26,18 @@ struct rgba {
     int a;
 };
 
-rgba mandelBrotColor(long double x, long double y, double cr = 0, double cy = 0) {
+rgba mandelBrotColor(long double x, long double y) {
     rgba colors;
     int brightness;
-    complex<double> a(x / (long double) windowSize - cr, y /(long double) windowSize - cy);
-    complex<double> z(0, 0);
+    complex<long double> a((long double) (x / (windowSize * zoom)) + posx,
+                           (long double) (y / (windowSize * zoom)) + posy);
+    complex<long double> z(0, 0);
 
     int i = 0;
     while (abs(z) < 2 && i <= MAX_ITERATION) {
         z = z * z + a; //z²+c
         i++;
     }
-
-    brightness = (255 * i) / MAX_ITERATION;
 
     if (i < MAX_ITERATION)
         brightness = (255 * i) / MAX_ITERATION;
@@ -72,21 +71,35 @@ void createThreadList() {
 
 void joinThreadList() {
     for (int i = 0; i < processor_count; i++) {
-        cout << " thread :" << i << "joined"  << endl;
+        cout << " thread :" << i << "joined" << endl;
         threadlist.at(i)->join();
     }
 }
 
-sf::Uint8 *turnRtoRGBA(){
-    auto *newArray = new sf::Uint8[windowSize*windowSize*4];
-    for(int x = 0; x < windowSize*windowSize; x++){
-        newArray[x*4]=redArray[x];//r
-        newArray[x*4+1]=0;//g
-        newArray[x*4+2]=0;//b
-        newArray[x*4+3]=255;//a
+sf::Uint8 *turnRtoRGBA() {
+    auto *newArray = new sf::Uint8[windowSize * windowSize * 4];
+    for (int x = 0; x < windowSize * windowSize; x++) {
+        newArray[x * 4] = redArray[x];//r
+        newArray[x * 4 + 1] = 0;//g
+        newArray[x * 4 + 2] = 0;//b
+        newArray[x * 4 + 3] = 255;//a
     }
 
     return newArray;
+}
+
+void refresh() {
+    try {
+        createThreadList();
+    } catch (std::system_error &error) {
+        std::cout << error.code() << " " << error.what() << std::endl;
+    }
+
+    try {
+        joinThreadList();
+    } catch (std::system_error &error) {
+        std::cout << error.code() << " " << error.what() << std::endl;
+    }
 }
 
 
@@ -100,27 +113,73 @@ int main(int argc, char *argv[]) {
     if (my_image.is_open()) {
         my_image << "P3\n"
                  << windowSize << " " << windowSize << " 255\n";
-        for (int y = 0; y < windowSize * windowSize*4; y+=4) {
-            my_image << (int)newarray[y] << ' ' << (int)newarray[y+1] << ' ' << (int)newarray[y+2]  <<  "\n";
+        for (int y = 0; y < windowSize * windowSize * 4; y += 4) {
+            my_image << (int) newarray[y] << ' ' << (int) newarray[y + 1] << ' ' << (int) newarray[y + 2] << "\n";
         }
         my_image.close();
     }
 
-    sf::RenderWindow window(sf::VideoMode(windowSize, windowSize,8), "MandelBrot Fractal");
+    sf::RenderWindow window(sf::VideoMode(windowSize, windowSize, 8), "MandelBrot Fractal");
     sf::Texture texture;
 
-    if(!texture.create(windowSize, windowSize)){
+    if (!texture.create(windowSize, windowSize)) {
         cerr << "erreur creating texture" << endl;
         return -1;
     }
     sf::Sprite sprite(texture);
 
-    while (window.isOpen()){
+    while (window.isOpen()) {
         sf::Event event;
-        while(window.pollEvent(event)){
-            if(event.type == sf::Event::Closed){
+        while (window.pollEvent(event)) {
+            if (event.type == sf::Event::Closed) {
                 window.close();
                 return 0;
+            }
+            if (event.type == sf::Event::KeyPressed) {
+                switch (event.key.code) {
+                    case (sf::Keyboard::Up):
+                        if(zoom < 1){
+                            posy -= 0.1;
+                        }else
+                            posy -= 0.5 / zoom;
+                        break;
+                    case (sf::Keyboard::Down):
+                        if(zoom < 1){
+                            posy += 0.1;
+                        }else
+                            posy += 0.5 / zoom;
+                        break;
+                    case (sf::Keyboard::Right):
+                        if(zoom < 1){
+                            posx += 0.1;
+                        }else
+                            posx += 0.5 / zoom;
+                        break;
+                    case (sf::Keyboard::Left):
+                        if(zoom < 1){
+                            posx -= 0.1;
+                        }else
+                            posx -= 0.5 / zoom;
+                        break;
+                    case (sf::Keyboard::PageUp):
+                        if (zoom < 1) {
+                            zoom += 0.1;
+                        } else {
+                            zoom += 0.5 / zoom;
+                        }
+                        break;
+                    case (sf::Keyboard::PageDown):
+                        if(zoom < 1){
+                            zoom -= 0.1;
+                        }else
+                            zoom -= 0.5 / zoom;
+                        if (zoom < 0)
+                            zoom = 0.1;
+                        break;
+                }
+                std::cout << "DEBUG  zoom :" << zoom << " posx: " << posx << " posy: " << posy << endl;
+            } else if (event.type == sf::Event::KeyReleased) {
+                refresh();
             }
         }
         sf::Uint8 *ptr = turnRtoRGBA();
