@@ -6,11 +6,13 @@
 #include <fstream>
 #include <thread>
 #include <mutex>
+#include <string.h>
 
 using namespace std;
 
-const int windowSize = 800;
-const int MAX_ITERATION = 20;
+int windowSizeX = 800;
+int windowSizeY = 800;
+int MAX_ITERATION = 20;
 std::mutex m;
 
 
@@ -18,7 +20,7 @@ const auto processor_count = std::thread::hardware_concurrency();
 sf::Uint8 *redArray;
 
 std::vector<std::thread *> threadlist;
-double posx = 0, posy = 0, zoom = 1;
+double posx = -2.2, posy = -1.3, zoom = 0.3;
 struct rgba {
     int r;
     int g;
@@ -29,8 +31,8 @@ struct rgba {
 rgba mandelBrotColor(long double x, long double y) {
     rgba colors;
     int brightness;
-    complex<long double> a((long double) (x / (windowSize * zoom)) + posx,
-                           (long double) (y / (windowSize * zoom)) + posy);
+    complex<long double> a((long double) (x / (windowSizeX * zoom)) + posx,
+                           (long double) (y / (windowSizeY * zoom)) + posy);
     complex<long double> z(0, 0);
 
     int i = 0;
@@ -55,9 +57,9 @@ rgba mandelBrotColor(long double x, long double y) {
 }
 
 void draw(int index) {
-    for (int y = 0; y < windowSize; y++) {
-        for (int x = index * (windowSize / processor_count); x < (index + 1) * (windowSize / processor_count); x++) {
-            redArray[x + y * windowSize] = mandelBrotColor(x, y).r;
+    for (int y = 0; y < windowSizeY; y++) {
+        for (int x = index * (windowSizeX / processor_count); x < (index + 1) * (windowSizeX / processor_count); x++) {
+            redArray[x + y * windowSizeX] = mandelBrotColor(x, y).r;
         }
     }
 }
@@ -77,8 +79,8 @@ void joinThreadList() {
 }
 
 sf::Uint8 *turnRtoRGBA() {
-    auto *newArray = new sf::Uint8[windowSize * windowSize * 4];
-    for (int x = 0; x < windowSize * windowSize; x++) {
+    auto *newArray = new sf::Uint8[windowSizeX * windowSizeY * 4];
+    for (int x = 0; x < windowSizeX * windowSizeY; x++) {
         newArray[x * 4] = redArray[x];//r
         newArray[x * 4 + 1] = 0;//g
         newArray[x * 4 + 2] = 0;//b
@@ -104,61 +106,91 @@ void refresh() {
 
 
 int main(int argc, char *argv[]) {
-    redArray = new sf::Uint8[windowSize * windowSize];
+    if(argc > 1){
+        cout << "sup"<<endl;
+        if(strcmp(argv[1],"ppm")==0){
+            cout << "image size x:" << endl;
+            cin >> windowSizeX;
+            cout << "image size y:"  << endl;
+            cin >> windowSizeY;
+
+
+            redArray = new sf::Uint8[windowSizeX * windowSizeY];
+            createThreadList();
+            joinThreadList();
+            ofstream my_image("Mandelbrot.ppm");
+            sf::Uint8 *newarray = turnRtoRGBA();
+
+            if (my_image.is_open()) {
+                my_image << "P3\n"
+                         << windowSizeX << " " << windowSizeY << " 255\n";
+                for (int y = 0; y < windowSizeX * windowSizeY * 4; y += 4) {
+                    my_image << (int) newarray[y] << ' ' << (int) newarray[y + 1] << ' ' << (int) newarray[y + 2] << "\n";
+                }
+                my_image.close();
+            }
+            return 1;
+        }
+    }
+    cout << "MandelBrot fractal" << endl;
+    cout << "By @ArthurSenpaii github" << endl;
+    cout << endl << "Enter window dimension x" << endl;
+    cin >> windowSizeX;
+    cout << endl << "Enter window dimension y" << endl;
+    cin >> windowSizeY;
+    sf::RenderWindow *window;
+    if(sf::VideoMode::getDesktopMode().width == windowSizeX && sf::VideoMode::getDesktopMode().height == windowSizeY){
+
+        window = new sf::RenderWindow(sf::VideoMode(sf::Style::Fullscreen, 8), "MandelBrot Fractal");
+    }else{
+        window = new sf::RenderWindow(sf::VideoMode(windowSizeX, windowSizeY, 8), "MandelBrot Fractal");
+    }
+
+    redArray = new sf::Uint8[windowSizeX * windowSizeY];
     createThreadList();
     joinThreadList();
     ofstream my_image("Mandelbrot.ppm");
     sf::Uint8 *newarray = turnRtoRGBA();
 
-    if (my_image.is_open()) {
-        my_image << "P3\n"
-                 << windowSize << " " << windowSize << " 255\n";
-        for (int y = 0; y < windowSize * windowSize * 4; y += 4) {
-            my_image << (int) newarray[y] << ' ' << (int) newarray[y + 1] << ' ' << (int) newarray[y + 2] << "\n";
-        }
-        my_image.close();
-    }
-
-    sf::RenderWindow window(sf::VideoMode(windowSize, windowSize, 8), "MandelBrot Fractal");
     sf::Texture texture;
 
-    if (!texture.create(windowSize, windowSize)) {
+    if (!texture.create(windowSizeX, windowSizeY)) {
         cerr << "erreur creating texture" << endl;
         return -1;
     }
     sf::Sprite sprite(texture);
 
-    while (window.isOpen()) {
+    while (window->isOpen()) {
         sf::Event event;
-        while (window.pollEvent(event)) {
+        while (window->pollEvent(event)) {
             if (event.type == sf::Event::Closed) {
-                window.close();
+                window->close();
                 return 0;
             }
             if (event.type == sf::Event::KeyPressed) {
                 switch (event.key.code) {
                     case (sf::Keyboard::Up):
-                        if(zoom < 1){
+                        if (zoom < 1) {
                             posy -= 0.1;
-                        }else
+                        } else
                             posy -= 0.5 / zoom;
                         break;
                     case (sf::Keyboard::Down):
-                        if(zoom < 1){
+                        if (zoom < 1) {
                             posy += 0.1;
-                        }else
+                        } else
                             posy += 0.5 / zoom;
                         break;
                     case (sf::Keyboard::Right):
-                        if(zoom < 1){
+                        if (zoom < 1) {
                             posx += 0.1;
-                        }else
+                        } else
                             posx += 0.5 / zoom;
                         break;
                     case (sf::Keyboard::Left):
-                        if(zoom < 1){
+                        if (zoom < 1) {
                             posx -= 0.1;
-                        }else
+                        } else
                             posx -= 0.5 / zoom;
                         break;
                     case (sf::Keyboard::PageUp):
@@ -169,9 +201,9 @@ int main(int argc, char *argv[]) {
                         }
                         break;
                     case (sf::Keyboard::PageDown):
-                        if(zoom < 1){
+                        if (zoom < 1) {
                             zoom -= 0.1;
-                        }else
+                        } else
                             zoom -= 0.5 / zoom;
                         if (zoom < 0)
                             zoom = 0.1;
@@ -184,9 +216,9 @@ int main(int argc, char *argv[]) {
         }
         sf::Uint8 *ptr = turnRtoRGBA();
         texture.update(ptr);
-        window.clear(sf::Color::White);
-        window.draw(sprite);
-        window.display();
+        window->clear(sf::Color::White);
+        window->draw(sprite);
+        window->display();
     }
     return 0;
 
