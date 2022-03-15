@@ -1,0 +1,6 @@
+mousPos 1029 421 //click haut
+mouseBPress 1017 259 // click plus bas 
+mouv 12 162
+mouv9 0.0125 0.16875 // piositif on monte -> ok
+
+
