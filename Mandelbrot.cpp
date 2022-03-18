@@ -6,10 +6,10 @@
 #include <thread>
 #include <string.h>
 
-float WINDOW_X_MAX = 2;
-float WINDOW_X_MIN = -2;
-float WINDOW_Y_MAX = 1.125;
-float WINDOW_Y_MIN = -1.125;
+long double WINDOW_X_MAX = 2;
+long double WINDOW_X_MIN = -2;
+long double WINDOW_Y_MAX = 1.125;
+long double WINDOW_Y_MIN = -1.125;
 
 int WINDOW_X = 1920;
 int WINDOW_Y = 1080;
@@ -26,9 +26,9 @@ sf::Vector2i mouseBPress;
     z0 = 0 -> z1 = + c -> z2 = c^2 + c
 */
 
-float rescale(int invalue, float maxoutrange, float minoutrange, float mininrange, float maxinrange)
+long double rescale(int invalue, long double maxoutrange, long double minoutrange, long double mininrange, long double maxinrange)
 {
-    float x = (invalue - mininrange) / (maxinrange - mininrange);
+    long double x = (invalue - mininrange) / (maxinrange - mininrange);
     return minoutrange + (maxoutrange - minoutrange) * x;
 }
 
@@ -39,17 +39,17 @@ void compute_thread(sf::Uint8 *pixels, int id)
     {
         for (int y = 0; y < WINDOW_Y; y++)
         {
-            float a = rescale(x, WINDOW_X_MIN, WINDOW_X_MAX, 0, WINDOW_X);
-            float b = rescale(y, WINDOW_Y_MIN, WINDOW_Y_MAX, 0, WINDOW_Y);
+            long double a = rescale(x, WINDOW_X_MIN, WINDOW_X_MAX, 0, WINDOW_X);
+            long double b = rescale(y, WINDOW_Y_MIN, WINDOW_Y_MAX, 0, WINDOW_Y);
 
-            float fixeda = a;
-            float fixedb = b;
+            long double fixeda = a;
+            long double fixedb = b;
 
             int i;
             for (i = 0; i < MAX_ITERATION; i++)
             {
-                float tempa = a * a - b * b;
-                float tempb = 2 * a * b;
+                long double tempa = a * a - b * b;
+                long double tempb = 2 * a * b;
 
                 a = tempa + fixeda;
                 b = tempb + fixedb;
@@ -60,7 +60,7 @@ void compute_thread(sf::Uint8 *pixels, int id)
                 }
             }
 
-            float bright = rescale(i, MAX_ITERATION, 0, 0, 1);
+            long double bright = rescale(i, MAX_ITERATION, 0, 0, 1);
 
             pixels[(x + y * WINDOW_X) * 4 + 0] = bright;
             pixels[(x + y * WINDOW_X) * 4 + 1] = 0;
@@ -85,10 +85,10 @@ void compute(sf::Uint8 *pixels)
     }
 }
 
-void zoom(float delta)
+void zoom(long double delta)
 {
 
-    float ampli = 0.01f * (WINDOW_X_MAX - WINDOW_X_MIN);
+    long double ampli = 0.01f * (WINDOW_X_MAX - WINDOW_X_MIN);
     std::cout << delta << std::endl;
     WINDOW_X_MAX -= delta * 16 * ampli;
     WINDOW_Y_MAX -= delta * 9 * ampli;
